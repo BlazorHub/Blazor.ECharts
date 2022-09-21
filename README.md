@@ -12,6 +12,8 @@
 
 开源地址：[https://github.com/lishewen/Blazor.ECharts](https://github.com/lishewen/Blazor.ECharts)
 
+国内镜像：[https://gitee.com/lishewen/Blazor.ECharts](https://gitee.com/lishewen/Blazor.ECharts)
+
 ECharts配置请参考：
 
 [https://echarts.apache.org/examples/zh/index.html](https://echarts.apache.org/examples/zh/index.html)
@@ -19,7 +21,7 @@ ECharts配置请参考：
 ## 使用方式
 1. 创建Blazor项目。
 2. 在NuGet中安装包`Blazor.ECharts` [![NuGet](https://img.shields.io/nuget/v/Blazor.ECharts.svg?style=flat-square&label=nuget)](https://www.nuget.org/packages/Blazor.ECharts/) ![downloads](https://img.shields.io/nuget/dt/Blazor.ECharts.svg)。
-3. 在`_Imports.razor`中添加`@using Blazor.ECharts.Component`。
+3. 在`_Imports.razor`中添加`@using Blazor.ECharts.Components`。
 4. 在`wwwroot/index.html`文件的`Head`中引入：
 ```html
 <script src="https://lib.baomitu.com/echarts/5.0.2/echarts.min.js"></script>
@@ -93,7 +95,7 @@ builder.Services.AddECharts();
   - [ ] parallelAxis
   - [ ] singleAxis
   - [x] timeline
-  - [ ] graphic
+  - [x] graphic
   - [ ] calendar
   - [ ] dataset
   - [ ] aria
@@ -134,7 +136,7 @@ builder.Services.AddECharts();
   - [ ] 象形柱图
   - [ ] 主题河流图
   - [ ] 日历坐标系
-  - [x] 词云图(使用方法Blazor.ECharts.WordCloud/README.md)
+  - [x] 词云图(使用方法：[Blazor.ECharts.WordCloud/README.md](Blazor.ECharts.WordCloud/README.md))
 
 ### Nuget Package中没有打包echarts.js的原因
 1. 减少包的体积

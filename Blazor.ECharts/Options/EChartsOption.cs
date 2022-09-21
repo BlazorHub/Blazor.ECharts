@@ -3,8 +3,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 namespace Blazor.ECharts.Options
@@ -18,6 +16,14 @@ namespace Blazor.ECharts.Options
         /// </summary>
         public Title Title { set; get; }
         public Label Label { get; set; }
+        /// <summary>
+        /// 标签的统一布局配置。
+        /// </summary>
+        public LabelLayout LabelLayout { set; get; }
+        /// <summary>
+        /// 滚轮缩放的极限控制，通过min, max最小和最大的缩放值，默认的缩放为1。
+        /// </summary>
+        public ScaleLimit ScaleLimit { get; set; }
         /// <summary>
         /// 提示框组件。
         /// </summary>
@@ -176,18 +182,10 @@ namespace Blazor.ECharts.Options
         /// </summary>
         public Brush Brush { set; get; }
         public BMap Bmap { get; set; }
+
         public override string ToString()
         {
-            JsonSerializerOptions jsonSerializerOptions = new()
-            {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-                Converters =
-            {
-                new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)
-            }
-            };
-            return JsonSerializer.Serialize(this, jsonSerializerOptions);
+            return EChartsOptionSerializer.Default.Serialize(this);
         }
     }
 }

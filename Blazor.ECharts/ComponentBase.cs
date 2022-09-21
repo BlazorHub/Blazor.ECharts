@@ -1,61 +1,66 @@
 ﻿using Blazor.ECharts.Options;
+using Blazor.ECharts.Options.Enum;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Rendering;
+using Microsoft.AspNetCore.Components.RenderTree;
+using Microsoft.JSInterop;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace Blazor.ECharts
 {
-    public class ComponentBase<T> : ComponentBase
+    public class ComponentBase<T> : ComponentBase, IAsyncDisposable where T : class
     {
         protected string Id = "echerts_" + Guid.NewGuid().ToString("N");
-        private EChartsOption<T> option;
+        private DotNetObjectReference<ComponentBase<T>> _objectReference;
+        /// <summary>
+        /// 主题
+        /// </summary>
         [Parameter]
-        public EChartsOption<T> Option
-        {
-            get
-            {
-                return option;
-            }
-            set
-            {
-                option = value;
-                if (option != null)
-                    _ = JsInterop.SetupChart(Id, Theme, option);
-            }
-        }
-        private string optionRaw;
+        public string Theme { get; set; }
         [Parameter]
-        public string OptionRaw
-        {
-            get
-            {
-                return optionRaw;
-            }
-            set
-            {
-                optionRaw = value;
-                if (!string.IsNullOrWhiteSpace(optionRaw))
-                    _ = JsInterop.SetupChart(Id, Theme, optionRaw);
-            }
-        }
+        public EChartsOption<T> Option { get; set; }
+        [Parameter]
+        public string OptionRaw { get; set; }
+        [Parameter]
+        public RenderFragment ChildContent { get; set; }
         /// <summary>
         /// 默认是否呈现组件
         /// </summary>
         [Parameter]
         public bool AutoRender { get; set; } = true;
         /// <summary>
-        /// 主题
+        /// 是否响应Resize
         /// </summary>
         [Parameter]
-        public string Theme { get; set; } = "light";
+        public bool ISResize { get; set; } = true;
         protected bool RequireRender { get; set; }
         [Inject]
         public JsInterop JsInterop { get; set; }
         [Parameter]
         public Func<object, Task> OnRenderCompleted { get; set; }
+
+        /// <summary>
+        /// 事件类型.
+        /// </summary>
+        [Parameter]
+        public List<EventType> EventTypes { get; set; } = new List<EventType>();
+
+        /// <summary>
+        /// 事件回调函数
+        /// </summary>
+        [Parameter]
+        public EventCallback<EchartsEventArgs> OnEventCallback { get; set; }
+
+        private EventInvokeHelper _eventInvokeHelper;
+        /// <summary>
+        /// 有否绑定事件
+        /// </summary>
+        private bool hasBindEvent;
 
         /// <summary>
         /// 设置自定义样式
@@ -68,7 +73,15 @@ namespace Blazor.ECharts
         /// </summary>
         [Parameter]
         public string Class { get; set; }
-
+        protected override void OnInitialized()
+        {
+            _eventInvokeHelper = new EventInvokeHelper(async echartsParams =>
+            {
+                if (EventTypes.Count > 0 && OnEventCallback.HasDelegate)
+                    await OnEventCallback.InvokeAsync(echartsParams);
+            });
+            _objectReference = DotNetObjectReference.Create(this);
+        }
         /// <summary>
         /// 默认情况下所有复杂组件都只进行一次渲染，该方法将组件置为需要再次渲染
         /// </summary>
@@ -84,17 +97,62 @@ namespace Blazor.ECharts
         {
             return RequireRender;
         }
+        protected override async Task OnParametersSetAsync()
+        {
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Create("BROWSER"))) return;
+
+            await SetupChartAsync();
+        }
+
+        private async Task SetupChartAsync()
+        {
+            if (Option == null && string.IsNullOrWhiteSpace(OptionRaw) && ChildContent == null) return;
+
+            if (ChildContent != null)
+            {
+                var sb = new StringBuilder();
+                var rtb = new RenderTreeBuilder();
+                ChildContent.Invoke(rtb);
+#pragma warning disable BL0006 // Do not use RenderTree types
+                foreach (var frame in rtb.GetFrames().Array)
+                {
+                    if (frame.FrameType == RenderTreeFrameType.Markup)
+                    {
+                        sb.AppendLine(frame.MarkupContent);
+                    }
+                }
+#pragma warning restore BL0006 // Do not use RenderTree types
+                var output = sb.ToString().Trim();
+
+                if (!string.IsNullOrWhiteSpace(output))
+                    await JsInterop.SetupChart(Id, Theme, output);
+            }
+            else if (!string.IsNullOrWhiteSpace(OptionRaw))
+                await JsInterop.SetupChart(Id, Theme, OptionRaw);
+            else
+                await JsInterop.SetupChart(Id, Theme, Option);
+
+            // 事件
+            if (EventTypes.Count > 0 && OnEventCallback.HasDelegate && !hasBindEvent)
+            {
+                foreach (var eventType in EventTypes)
+                {
+                    await JsInterop.ChartOn(Id, eventType, DotNetObjectReference.Create(_eventInvokeHelper));
+                }
+                hasBindEvent = true;
+            }
+            if (ISResize)
+            {
+                await AddResizeListener();
+            }
+        }
+
         protected override async Task OnAfterRenderAsync(bool firstRender)
         {
             if (AutoRender == false) return;
             if (firstRender)
             {
-                if (option == null && string.IsNullOrWhiteSpace(optionRaw)) return;
-
-                if (!string.IsNullOrWhiteSpace(optionRaw))
-                    await JsInterop.SetupChart(Id, Theme, optionRaw);
-                else
-                    await JsInterop.SetupChart(Id, Theme, option);
+                await SetupChartAsync();
 
                 if (OnRenderCompleted != null)
                 {
@@ -111,9 +169,35 @@ namespace Blazor.ECharts
         {
             await JsInterop.SetupChart(Id, Theme, opt, notMerge);
         }
+        public async Task ResizeAsync()
+        {
+            await JsInterop.Resize(Id);
+        }
+        [JSInvokable("OnResize")]
+        public void OnResize()
+        {
+            if (ISResize)
+            {
+                _ = ResizeAsync();
+            }
+        }
+        private async Task AddResizeListener()
+        {
+            await JsInterop.InvokeVoidAsync("echartsFunctions.addResizeListener", _objectReference);
+        }
+        private async Task RemoveResizeListener()
+        {
+            await JsInterop.InvokeVoidAsync("echartsFunctions.removeResizeListener", _objectReference);
+        }
         public void Refresh()
         {
             StateHasChanged();
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await RemoveResizeListener();
+            _objectReference?.Dispose();
         }
     }
 }
